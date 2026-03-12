@@ -1,0 +1,101 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+Import et chargement de données
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(sf)
+library(mapsf)
+
+data <- read.csv("listings.csv")
+
+arrondissements <- st_read(dsn = "https://opendata.paris.fr/explore/dataset/arrondissements/download/?format=geojson&timezone=Europe/Berlin&lang=fr")
+```
+
+Préparation des données
+
+```{r}
+# sum(is.na(data$price))
+
+# Construit un jeu de données plus petit
+colonnes <- c("latitude", "longitude", "price")
+data2 <- data[, colonnes]
+
+# Calcul les centres des arrondissements
+centro <- st_centroid(arrondissements$geometry) |> st_transform(crs=4326)
+
+
+# Ajoute à chaque individu son arrondissement le plus proche
+# Attention! Calcul lourd dù au plus de 80 000 individus!
+
+for (i in 1:nrow(data2)) {
+  p <- st_point(c(data2$longitude[i], data2$latitude[i]));
+  a <- 1;
+  d_min <- 1000000;
+  # On calcule les distances de l'individu i aux centres et ne garde que le min
+  for (c in centro) {
+    d <- st_distance(p, c);
+    if (d < d_min) {
+      d_min <- d;
+      a <- j;
+    };
+  };
+  
+  data2[i, "a"] <- a
+  
+}
+
+table(data2$a)
+
+prix_a <- aggregate(data2$price, list(data2$a), mean)
+colnames(prix_a) <- c("Group", "prix_moy")
+
+arrondissements$prix_moy <- prix_a$prix_moy
+
+
+
+```
+
+Carte des prix moyens
+
+```{r}
+#   Créé les arrondissements d'ile de France sur la carte de Paris
+
+mf_theme("candy")
+# Arrondissements
+mf_map(x = arrondissements, border = "black") 
+
+
+#   Ajoute les sphères dee valeurs
+
+# Assignation de valeurs bidon pour tester la carte:
+# arrondissements$prix_moy <- 1:10
+
+mf_map(
+  x = arrondissements,
+  var = "prix_moy",
+  type = "prop",  
+  leg_title = "Prix moyen des logements de Paris",
+  col="#C24168",
+  add= TRUE,
+  inches=0.2)
+
+#   Ajoute les numéros des arrondissements
+mf_label(
+  x = arrondissements,
+  var = "c_ar",
+  col = "black",
+  cex = 0.8,
+)
+
+mf_title("Prix moyen du logement des arrondissements de Paris")
+```
+
+Documentation et source pour aider:
+
+<https://stat.pages.ined.fr/support/assistoolsmtd/R/assist/posts/mapsf/map_sf.html>
