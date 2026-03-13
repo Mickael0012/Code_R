@@ -1,0 +1,119 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+**Import et chargement de données**
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(sf)
+library(mapsf)
+
+data <- read.csv("listings.csv")
+
+arrondissements <- st_read(dsn = "https://opendata.paris.fr/explore/dataset/arrondissements/download/?format=geojson&timezone=Europe/Berlin&lang=fr")
+
+```
+
+**Partie 1 - Fonction de cacule de la variance de densité (spatiale)**
+
+```{r}
+
+Calcul_D <- function(data2, n) {
+
+  long_min <- min(data2$longitude);
+  long_max <- max(data2$longitude);
+  long_ec <- long_max-long_min;
+  
+  lat_min <- min(data2$latitude);
+  lat_max <- max(data2$latitude);
+  lat_ec <- lat_max-lat_min;
+  
+  # Densité spatiale théorique des individus (nb_individus_totale/nb_cases_totale)
+  densite_th <- nrow(data2)/n**2;
+  
+  
+  # Calacule de la variance de la densité spatiale des individus
+  
+  somme <- 0;
+  # Boucle sur la logitude
+  for (long in seq(long_min, long_max-long_ec/n, long_ec/n)) {
+    # Boucle sur la latitude
+    for (lat in seq(lat_min, lat_max-lat_ec/n, lat_ec/n)) {
+      
+      # Verifie les individus étant géographiquement dans la case "ij"
+      chk_long <- (data2$longitude >= long & data2$longitude <= (long + long_ec/n));
+      chk_lat <- (data2$latitude >= lat & data2$latitude <= (lat + lat_ec/n));
+      
+      somme <- somme + (sum(chk_long & chk_lat) - densite_th)**2
+    };
+  };
+  
+  # Variation de la Densité observée
+  Dvar_obs <- somme/n**2;
+  
+  D <- list(
+    var_obs = Dvar_obs,
+    theorique = densite_th,
+    IC = Dvar_obs/densite_th
+  );
+  
+  return(D)
+
+}
+```
+
+**Test et préparations**
+
+```{r}
+# sum(is.na(data$price))
+
+
+# Construit un jeu de données plus petit. Celui-ci et la population qu'il renseigne sur sera utilisé pour la fonction.
+
+colonnes <- c("latitude", "longitude", "price")
+data2 <- data[, colonnes]
+
+summary(data2)
+
+# Fixer le nombre n de partitions de la longitude et latitude. Le nombre de cases totale de la grille en résultant est n^2.
+n <- 100
+```
+
+**Exécution de la fonction et résultats**
+
+```{r}
+
+D <- Calcul_D(data2, n)
+
+# Variance de la densité observée
+D$var_obs
+
+# Ecart-type de la densité observée
+(D$var_obs)**(1/2)
+
+# Densité théorique
+D$theorique
+
+# Indice de concentration (densité observée sur densité théorique)
+D$IC
+```
+
+**Interprétation:**
+
+-   si IC = 1 , la distribution est **aléatoire**
+
+<!-- -->
+
+-   si IC \> 1 , la distribution est **concentrée**
+
+<!-- -->
+
+-   si IC \< 1 , la distribution est **homogène**
+
+**Documentation et source pour aider:**
+
+<https://www.umr-lastig.fr/paul-chapron/resources/cours_site/autocorr%C3%A9lation-spatiale-moran-et-geary.html>
